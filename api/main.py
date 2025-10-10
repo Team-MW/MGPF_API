@@ -7,39 +7,47 @@ from flask_cors import CORS
 import psycopg2
 from api.connectDB.database import SessionLocal  # ✅ uniquement, pas create_tables_if_not_exist
 
-# ========== CONFIG IMPORTS ==========
+# ========================================
+# CONFIGURATION DES CHEMINS
+# ========================================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# --- Imports internes ---
+# ========================================
+# IMPORTS INTERNES AVEC GESTION DE FALLBACK
+# ========================================
 try:
     from api.connectDB.database import create_tables_if_not_exist, SessionLocal
     from api.connectDB.models import Plaque, Parking
     from api.services.plaque_service import verifier_plaque
     from api.ocr_engine import extract_text
-    from api.super_admin.rootSuperAdmin import super_admin_bp  # 🟢 Import du blueprint
+    from api.super_admin.rootSuperAdmin import super_admin_bp
+    from api.routeRelationAdminGardien.gardienroute import gardien_bp
 except ImportError:
     from connectDB.database import create_tables_if_not_exist, SessionLocal
     from connectDB.models import Plaque, Parking
     from services.plaque_service import verifier_plaque
     from ocr_engine import extract_text
-    from super_admin.rootSuperAdmin import super_admin_bp  # 🟢 Import du blueprint
+    from super_admin.rootSuperAdmin import super_admin_bp
+    from routeRelationAdminGardien.gardienroute import gardien_bp
 
 # ========================================
-# CONFIGURATION DE FLASK
+# CONFIGURATION FLASK
 # ========================================
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-
-
-# 🟢 ENREGISTREMENT DU BLUEPRINT SUPER ADMIN
-app.register_blueprint(super_admin_bp)
 # ========================================
-# CONNEXION À LA BASE DE DONNÉES
+# ENREGISTREMENT DES BLUEPRINTS
+# ========================================
+app.register_blueprint(super_admin_bp)
+app.register_blueprint(gardien_bp)
+
+# ========================================
+# CONNEXION BASE DE DONNÉES
 # ========================================
 def get_db_connection():
     return psycopg2.connect(
@@ -101,7 +109,7 @@ def ocr():
             proprietaire, entreprise, places, date_enreg = result
             logging.info(f"✅ Plaque autorisée : {plaque_text}")
             return jsonify({
-                'text': plaque_text,  # ✅ attendu par le front
+                'text': plaque_text,
                 'statut': 'Autorisé',
                 'proprietaire': proprietaire,
                 'entreprise': entreprise,
@@ -113,7 +121,7 @@ def ocr():
         else:
             logging.info(f"❌ Plaque inconnue : {plaque_text}")
             return jsonify({
-                'text': plaque_text,  # ✅ pour affichage front
+                'text': plaque_text,
                 'statut': 'Non autorisé',
                 'message': f"La plaque {plaque_text} n'est pas enregistrée dans ce parking."
             }), 404

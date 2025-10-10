@@ -1,11 +1,23 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+import psycopg2
 
+def get_db_connection():
+    """
+    Fournit une connexion directe à PostgreSQL (hors SQLAlchemy)
+    """
+    return psycopg2.connect(
+        dbname="DB_MGPF",
+        user="postgres",
+        password="931752",  # ⚠️ adapte si besoin
+        host="localhost",
+        port="5432"
+    )
 # ========================
 # CONFIG POSTGRESQL LOCAL
 # ========================
 DB_USER = "postgres"
-DB_PASSWORD = "931752"  # ⚠️ à adapter
+DB_PASSWORD = "931752"
 DB_HOST = "localhost"
 DB_PORT = "5432"
 DB_NAME = "DB_MGPF"

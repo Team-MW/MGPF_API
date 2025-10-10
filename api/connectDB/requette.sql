@@ -11,3 +11,15 @@ CREATE TABLE IF NOT EXISTS parking (
   date_enregistrement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   admin_id VARCHAR(255)                    -- L’ID du gérant (Clerk)
 );
+
+
+ -- Suivis Gardien
+CREATE TABLE suivis_gardien (
+    id SERIAL PRIMARY KEY,
+    plaque VARCHAR(50) NOT NULL,
+    statut VARCHAR(50) NOT NULL,
+    parking_id INTEGER,
+    clerk_id VARCHAR(100),
+    type_scan VARCHAR(20), -- "auto" ou "manuel"
+    date_heure TIMESTAMP DEFAULT NOW()
+);
