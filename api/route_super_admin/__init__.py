@@ -4,7 +4,7 @@ from datetime import datetime
 import psycopg2
 
 # === Création du Blueprint (à importer dans main.py ensuite)
-super_admin_bp = Blueprint('super_admin', __name__)
+super_admin_bp = Blueprint('route_super_admin', __name__)
 
 # === Connexion PostgreSQL
 def get_db_connection():

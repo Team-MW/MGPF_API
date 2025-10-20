@@ -6,7 +6,7 @@ from datetime import datetime
 # ============================
 # CONFIGURATION DU BLUEPRINT
 # ============================
-super_admin_bp = Blueprint('super_admin', __name__)
+super_admin_bp = Blueprint('route_super_admin', __name__)
 
 # ============================
 # CONNEXION À LA BASE
@@ -161,3 +161,88 @@ def get_parking():
     except Exception as e:
         logging.error(f"Erreur get_parking : {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+# ==========================
+# ➕ ROUTE — Créer un nouveau parking_id.   faut crée le front qui va avec
+# ==========================
+@super_admin_bp.route('/parking_id', methods=['POST'])
+def create_parking_id():
+    """
+    Le Super Admin crée un nouveau parking_id pour un admin.
+    Champs requis : nom, admin_id
+    """
+    try:
+        data = request.get_json(force=True)
+        nom = data.get('nom')
+        admin_id = data.get('admin_id')
+
+        if not nom or not admin_id:
+            return jsonify({'message': 'Champs requis manquants (nom, admin_id)'}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # 🔍 Vérifier si un parking existe déjà pour cet admin
+        cur.execute("SELECT * FROM parking_id WHERE admin_id = %s", (admin_id,))
+        existing = cur.fetchone()
+        if existing:
+            return jsonify({'message': 'Un parking est déjà associé à cet administrateur.'}), 400
+
+        # 💾 Insertion
+        cur.execute("INSERT INTO parking_id (nom, admin_id) VALUES (%s, %s) RETURNING id", (nom, admin_id))
+        new_id = cur.fetchone()[0]
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        logging.info(f"✅ Nouveau parking_id créé : {nom} (id={new_id})")
+        return jsonify({
+            'success': True,
+            'message': 'Parking créé avec succès ✅',
+            'parking_id': new_id
+        }), 201
+
+    except Exception as e:
+        logging.error(f"Erreur lors de la création du parking : {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ==========================
+# 📜 ROUTE — Liste des parkings existants
+# ==========================
+@super_admin_bp.route('/parking', methods=['GET'])
+def get_parkings():
+    """
+    Retourne la liste de tous les parkings_id existants.
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, nom, admin_id FROM parking_id ORDER BY id ASC")
+        parkings = cur.fetchall()
+
+        result = [{'id': p[0], 'nom': p[1], 'admin_id': p[2]} for p in parkings]
+
+        cur.close()
+        conn.close()
+        return jsonify(result), 200
+
+    except Exception as e:
+        logging.error(f"Erreur récupération parkings : {e}", exc_info=True)
+        return jsonify({'message': str(e)}), 500
+
+@super_admin_bp.route('/parking_id/<int:parking_id>', methods=['DELETE'])
+def delete_parking_id(parking_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM parking_id WHERE id = %s", (parking_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Parking supprimé avec succès ✅'}), 200
+    except Exception as e:
+        logging.error(f"Erreur delete_parking_id : {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500

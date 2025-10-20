@@ -5,7 +5,11 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import psycopg2
-from api.connectDB.database import SessionLocal  # ✅ uniquement, pas create_tables_if_not_exist
+import json
+from api.connectDB.database import SessionLocal  # uniquement, pas create_tables_if_not_exist
+
+from api.parking.parking_routes import parking_bp
+
 
 # ========================================
 # CONFIGURATION DES CHEMINS
@@ -23,15 +27,17 @@ try:
     from api.connectDB.models import Plaque, Parking
     from api.services.plaque_service import verifier_plaque
     from api.ocr_engine import extract_text
-    from api.super_admin.rootSuperAdmin import super_admin_bp
-    from api.routeRelationAdminGardien.gardienroute import gardien_bp
+    from api.route_super_admin.rootSuperAdmin import super_admin_bp
+    from api.route_Relation_Admin_Gardien.gardienroute import gardien_bp
+    from api.route_Relation_Visiteur_Admin.routesVisiteur import routes_visiteur_bp
 except ImportError:
     from connectDB.database import create_tables_if_not_exist, SessionLocal
     from connectDB.models import Plaque, Parking
     from services.plaque_service import verifier_plaque
     from ocr_engine import extract_text
-    from super_admin.rootSuperAdmin import super_admin_bp
-    from routeRelationAdminGardien.gardienroute import gardien_bp
+    from route_super_admin.rootSuperAdmin import super_admin_bp
+    from route_Relation_Admin_Gardien.gardienroute import gardien_bp
+    from route_Relation_Visiteur_Admin.routesVisiteur import routes_visiteur_bp
 
 # ========================================
 # CONFIGURATION FLASK
@@ -45,6 +51,11 @@ logging.basicConfig(level=logging.INFO)
 # ========================================
 app.register_blueprint(super_admin_bp)
 app.register_blueprint(gardien_bp)
+app.register_blueprint(routes_visiteur_bp)
+
+
+
+app.register_blueprint(parking_bp)
 
 # ========================================
 # CONNEXION BASE DE DONNÉES
@@ -59,7 +70,7 @@ def get_db_connection():
     )
 
 # ========================================
-# ROUTE OCR - TEST PLAQUE PAR LE GARDIEN
+# ROUTE OCR - TEST PLAQUE PAR LE GARDIEN (améliorée + complète)
 # ========================================
 @app.route('/ocr', methods=['POST'])
 def ocr():
@@ -67,9 +78,34 @@ def ocr():
     Vérifie si une plaque est autorisée :
     - si 'text' est envoyé → saisie manuelle
     - si 'image' est envoyé → OCR automatique
+    - Vérifie aussi dans la table 'demandes' si le statut est 'Refusée' → non autorisée
+    - Filtrée selon le parking du gardien (droits_gardiens)
     """
     try:
         plaque_text = None
+        clerk_id = request.form.get('clerk_id') or request.args.get('clerk_id')
+
+        if not clerk_id:
+            return jsonify({'text': '', 'statut': 'Erreur', 'message': 'clerk_id manquant'}), 400
+
+        # === Connexion base ===
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Étape 0 — Trouver le parking associé à ce gardien
+        cur.execute("SELECT parking_id FROM droits_gardiens WHERE clerk_id = %s;", (clerk_id,))
+        gardien_data = cur.fetchone()
+
+        if not gardien_data:
+            cur.close()
+            conn.close()
+            return jsonify({
+                'text': '',
+                'statut': 'Erreur',
+                'message': f"Aucun parking associé au gardien ({clerk_id})."
+            }), 403
+
+        parking_id = gardien_data[0]
 
         # === Cas 1 : Plaque saisie manuellement ===
         if 'text' in request.form:
@@ -85,20 +121,41 @@ def ocr():
             logging.info(f"Texte extrait via OCR : {plaque_text}")
 
         else:
+            cur.close()
+            conn.close()
             return jsonify({'text': '', 'statut': 'Erreur', 'message': 'Aucune donnée reçue'}), 400
 
         if not plaque_text:
+            cur.close()
+            conn.close()
             return jsonify({'text': '', 'statut': 'Erreur', 'message': 'Plaque vide ou non lisible'}), 400
 
-        # === Vérification dans la base PostgreSQL ===
-        conn = get_db_connection()
-        cur = conn.cursor()
+        # === Étape 1 : Vérifier dans la table 'demandes' (dernière entrée) ===
+        cur.execute("""
+            SELECT statut FROM demandes 
+            WHERE plaque = %s AND parking_id = %s
+            ORDER BY id DESC LIMIT 1;
+        """, (plaque_text, parking_id))
+        demande = cur.fetchone()
 
+        if demande:
+            statut_demande = demande[0]
+            if statut_demande and statut_demande.lower() in ['refusée', 'refusee']:
+                logging.info(f"❌ Plaque {plaque_text} refusée par le super admin (parking {parking_id})")
+                cur.close()
+                conn.close()
+                return jsonify({
+                    'text': plaque_text,
+                    'statut': 'Non autorisé',
+                    'message': f"La plaque {plaque_text} a été refusée par l'administration."
+                }), 403
+
+        # === Étape 2 : Vérifier dans la table 'parking' (pour CE parking uniquement) ===
         cur.execute("""
             SELECT proprietaire, entreprise, places_selectionnees, date_enregistrement
             FROM parking
-            WHERE plaque = %s
-        """, (plaque_text,))
+            WHERE UPPER(plaque) = %s AND parking_id = %s
+        """, (plaque_text, parking_id))
 
         result = cur.fetchone()
         cur.close()
@@ -107,31 +164,39 @@ def ocr():
         # === Si plaque trouvée ===
         if result:
             proprietaire, entreprise, places, date_enreg = result
-            logging.info(f"✅ Plaque autorisée : {plaque_text}")
+            logging.info(f"✅ Plaque autorisée : {plaque_text} (parking {parking_id})")
             return jsonify({
                 'text': plaque_text,
                 'statut': 'Autorisé',
                 'proprietaire': proprietaire,
                 'entreprise': entreprise,
                 'places': places,
+                'parking_id': parking_id,
                 'date_enregistrement': str(date_enreg)
             }), 200
 
         # === Si plaque non trouvée ===
         else:
-            logging.info(f"❌ Plaque inconnue : {plaque_text}")
+            logging.info(f"❌ Plaque inconnue : {plaque_text} (parking {parking_id})")
             return jsonify({
                 'text': plaque_text,
                 'statut': 'Non autorisé',
+                'parking_id': parking_id,
                 'message': f"La plaque {plaque_text} n'est pas enregistrée dans ce parking."
             }), 404
 
     except Exception as e:
         logging.error(f"Erreur OCR : {e}", exc_info=True)
-        return jsonify({'text': '', 'statut': 'Erreur', 'message': str(e)}), 500
+        return jsonify({
+            'text': '',
+            'statut': 'Erreur',
+            'message': str(e)
+        }), 500
+
+
 
 # ========================================
-# ROUTE D'ENREGISTREMENT DE PLAQUE
+# ROUTE D'ENREGISTREMENT DE PLAQUE (corrigée)
 # ========================================
 @app.route('/register', methods=['POST'])
 def register_plate():
@@ -140,30 +205,43 @@ def register_plate():
         plaque = data.get('plate', '').strip().upper()
         proprietaire = data.get('owner', '').strip()
         entreprise = data.get('company', '').strip()
-        places = data.get('parkingPlaces', [])
+        places = data.get('parkingPlaces', [])  # liste ex: ["A1","A2"]
         admin_id = data.get('admin_id', 'inconnu')
+        parking_id = data.get('parking_id')      # ✅ récupère l’ID du parking
 
-        if not plaque or not proprietaire:
-            return jsonify({'success': False, 'message': 'Champs requis manquants'}), 400
+        if not plaque or not proprietaire or not parking_id:
+            return jsonify({'success': False, 'message': 'Champs requis manquants (plaque, owner, parking_id)'}), 400
 
         conn = get_db_connection()
         cur = conn.cursor()
 
+        # 💾 Insertion dans la table parking avec le parking_id
         cur.execute("""
-            INSERT INTO parking (plaque, proprietaire, entreprise, places_selectionnees, admin_id, date_enregistrement)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (plaque, proprietaire, entreprise, str(places), admin_id, datetime.now()))
+            INSERT INTO parking (plaque, proprietaire, entreprise, places_selectionnees, admin_id, parking_id, date_enregistrement)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            plaque,
+            proprietaire,
+            entreprise,
+            json.dumps(places),  # ✅ on stocke proprement en JSON
+            admin_id,
+            int(parking_id),
+            datetime.now()
+        ))
 
         conn.commit()
         cur.close()
         conn.close()
 
-        logging.info(f"✅ Plaque {plaque} enregistrée pour {proprietaire}")
+        logging.info(f"✅ Plaque {plaque} enregistrée pour {proprietaire} (parking_id={parking_id})")
         return jsonify({'success': True, 'message': 'Plaque enregistrée avec succès'}), 201
 
     except Exception as e:
-        logging.error(f"Erreur lors de l’enregistrement de la plaque : {e}", exc_info=True)
+        logging.error(f"Erreur lors de l'enregistrement de la plaque : {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+
 
 # ========================================
 # ROUTE GET - LISTE DES PLAQUES (debug)
