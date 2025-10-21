@@ -8,6 +8,7 @@ import psycopg2
 import json
 from api.connectDB.database import SessionLocal  # uniquement, pas create_tables_if_not_exist
 
+
 from api.parking.parking_routes import parking_bp
 
 
@@ -39,6 +40,9 @@ except ImportError:
     from route_Relation_Admin_Gardien.gardienroute import gardien_bp
     from route_Relation_Visiteur_Admin.routesVisiteur import routes_visiteur_bp
 
+
+
+from api.createAccount.create import create_account_bp
 # ========================================
 # CONFIGURATION FLASK
 # ========================================
@@ -53,7 +57,7 @@ app.register_blueprint(super_admin_bp)
 app.register_blueprint(gardien_bp)
 app.register_blueprint(routes_visiteur_bp)
 
-
+app.register_blueprint(create_account_bp)
 
 app.register_blueprint(parking_bp)
 

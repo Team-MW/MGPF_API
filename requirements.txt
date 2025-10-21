@@ -60,3 +60,5 @@ tiktoken==0.9.0
 tokenizers==0.19.1
 torch==2.7.0
 torchvision==0.22.0
+clerk-sdk
+python-dotenv
