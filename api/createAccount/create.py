@@ -1,3 +1,4 @@
+from api.connectDB.database import get_db_connection
 from flask import Blueprint, request, jsonify
 import psycopg2, logging, requests
 
@@ -7,22 +8,13 @@ import psycopg2, logging, requests
 create_account_bp = Blueprint('create_account_bp', __name__)
 
 # ==============================
-# CLÉ CLERK EN DUR (test)
-# ==============================
-CLERK_API_KEY = "sk_test_QS06RFaX2f2aNUAHQMdYL5ZY7iopVQENvHtk5kzjwQ"
+import os
+CLERK_API_KEY = os.getenv("CLERK_API_KEY")  # défini dans api/.env
 CLERK_API_URL = "https://api.clerk.com/v1/users"
 
 # ==============================
 # CONNEXION BASE DE DONNÉES
 # ==============================
-def get_db_connection():
-    return psycopg2.connect(
-        dbname="DB_MGPF",
-        user="postgres",
-        password="931752",
-        host="localhost",
-        port="5432"
-    )
 
 # ==============================
 # ROUTE : CRÉATION D’UN GARDIEN

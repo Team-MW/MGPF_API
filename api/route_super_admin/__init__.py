@@ -1,3 +1,4 @@
+from api.connectDB.database import get_db_connection
 import logging
 from flask import Blueprint, jsonify, request
 from datetime import datetime
@@ -7,14 +8,6 @@ import psycopg2
 super_admin_bp = Blueprint('route_super_admin', __name__)
 
 # === Connexion PostgreSQL
-def get_db_connection():
-    return psycopg2.connect(
-        dbname="DB_MGPF",
-        user="postgres",
-        password="931752",  # 🔁 ton mot de passe PostgreSQL
-        host="localhost",
-        port="5432"
-    )
 
 # ========================================
 # 📘 ROUTE : RÉCUPÉRER TOUTES LES DEMANDES

@@ -1,3 +1,4 @@
+from api.connectDB.database import get_db_connection
 # api/parkings/parking_routes.py
 from flask import Blueprint, jsonify, request
 import psycopg2, json, logging
@@ -8,14 +9,6 @@ parking_bp = Blueprint('parking_bp', __name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # Connexion PostgreSQL
 # ─────────────────────────────────────────────────────────────────────────────
-def get_db_connection():
-    return psycopg2.connect(
-        dbname="DB_MGPF",
-        user="postgres",
-        password="931752",
-        host="localhost",
-        port="5432"
-    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GET - Récupération configuration persistée du parking

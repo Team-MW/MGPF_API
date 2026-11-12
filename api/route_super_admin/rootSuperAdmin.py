@@ -1,3 +1,4 @@
+from api.connectDB.database import get_db_connection
 import logging
 from flask import Blueprint, jsonify, request
 import psycopg2
@@ -11,14 +12,6 @@ super_admin_bp = Blueprint('route_super_admin', __name__)
 # ============================
 # CONNEXION À LA BASE
 # ============================
-def get_db_connection():
-    return psycopg2.connect(
-        dbname="DB_MGPF",
-        user="postgres",
-        password="931752",  # ⚠️ Mets ton mot de passe PostgreSQL ici
-        host="localhost",
-        port="5432"
-    )
 
 
 # ============================
