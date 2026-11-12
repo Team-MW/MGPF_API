@@ -1,3 +1,4 @@
+from api.connectDB.database import get_db_connection
 import logging
 from flask import Blueprint, request, jsonify
 import psycopg2
@@ -5,14 +6,6 @@ import psycopg2
 # ==========================
 # CONNEXION BASE DE DONNÉES
 # ==========================
-def get_db_connection():
-    return psycopg2.connect(
-        dbname="DB_MGPF",
-        user="postgres",
-        password="931752",
-        host="localhost",
-        port="5432"
-    )
 
 # ==========================
 # BLUEPRINT VISITEUR
